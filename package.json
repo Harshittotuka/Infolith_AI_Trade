@@ -1,0 +1,17 @@
+{
+  "name": "ai-trade-alerts",
+  "version": "0.2.0",
+  "description": "Upstox-powered stock and index alert web app with email, Telegram, SMS, browser, and webhook notifications.",
+  "type": "module",
+  "scripts": {
+    "start": "node src/server/index.js",
+    "dev": "node --watch src/server/index.js",
+    "check": "node --check src/server/index.js && node --check src/server/instruments.js && node --check src/server/market/upstox.js && node --check src/server/notifications/index.js && node --check public/app.js",
+    "test": "node --test"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.7",
+    "express": "^4.19.2",
+    "nodemailer": "^9.0.3"
+  }
+}
