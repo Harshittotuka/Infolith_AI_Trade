@@ -1,5 +1,7 @@
 import "dotenv/config";
 import crypto from "node:crypto";
+import fs from "node:fs";
+import https from "node:https";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import express from "express";
@@ -282,7 +284,29 @@ const poller = createPoller({
 });
 
 const port = Number(process.env.PORT || 5175);
-app.listen(port, () => {
-  poller.start();
-  console.log(`AI Trade Alerts running at http://localhost:${port}`);
-});
+const sslCertFile = process.env.SSL_CERT_FILE;
+const sslKeyFile = process.env.SSL_KEY_FILE;
+
+function startServer() {
+  if (sslCertFile && sslKeyFile) {
+    const server = https.createServer(
+      {
+        cert: fs.readFileSync(sslCertFile),
+        key: fs.readFileSync(sslKeyFile)
+      },
+      app
+    );
+    server.listen(port, () => {
+      poller.start();
+      console.log(`AI Trade Alerts running at https://localhost:${port}`);
+    });
+    return;
+  }
+
+  app.listen(port, () => {
+    poller.start();
+    console.log(`AI Trade Alerts running at http://localhost:${port}`);
+  });
+}
+
+startServer();
