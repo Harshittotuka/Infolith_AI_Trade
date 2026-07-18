@@ -95,6 +95,8 @@ export function createUpstoxProvider({ store }) {
 
   return {
     name: "upstox",
+    getAccessToken,
+    resolveInstrument,
     async getQuotes(instruments) {
       const resolved = await Promise.all(
         instruments.map(async (instrument) => ({

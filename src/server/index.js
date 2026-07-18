@@ -10,6 +10,7 @@ import { searchInstruments } from "./instruments.js";
 import { createMarketProvider } from "./market/index.js";
 import { createNotifier } from "./notifications/index.js";
 import { createPoller } from "./poller.js";
+import { createUpstoxFeed } from "./market/upstox-feed.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -87,6 +88,7 @@ app.get("/api/status", asyncRoute(async (_request, response) => {
     market: await market.status(),
     notifications: notifier.status(),
     pollIntervalMs: Number(process.env.POLL_INTERVAL_MS || 15000),
+    feed: feed ? feed.status() : null,
     alerts: store.listAlerts().length
   });
 }));
@@ -118,6 +120,7 @@ app.get("/api/alerts", (_request, response) => {
 
 app.post("/api/alerts", (request, response) => {
   const alert = store.createAlert(normalizeAlertInput(request.body));
+  syncFeed();
   response.status(201).json(alert);
 });
 
@@ -129,11 +132,13 @@ app.patch("/api/alerts/:id", (request, response) => {
   }
 
   const alert = store.updateAlert(request.params.id, normalizeAlertInput(request.body, existing));
+  syncFeed();
   response.json(alert);
 });
 
 app.delete("/api/alerts/:id", (request, response) => {
   store.deleteAlert(request.params.id);
+  syncFeed();
   response.status(204).end();
 });
 
@@ -257,11 +262,13 @@ app.get("/auth/upstox/callback", asyncRoute(async (request, response) => {
     ...payload,
     connectedAt: new Date().toISOString()
   });
+  startLiveFeed().catch((error) => console.error(error));
   response.redirect("/?upstox=connected");
 }));
 
 app.post("/api/upstox/logout", (_request, response) => {
   store.clearUpstoxSession();
+  feed?.stop();
   response.status(204).end();
 });
 
@@ -283,9 +290,52 @@ const poller = createPoller({
   }
 });
 
+let feedStatus = null;
+const feed = market.isLive
+  ? createUpstoxFeed({
+      getAccessToken: market.upstox.getAccessToken,
+      resolveInstrument: market.upstox.resolveInstrument,
+      onQuote(quote) {
+        broadcast("quote", quote);
+        poller.processQuotes([quote]).catch((error) => console.error(error));
+      },
+      onStatus(status) {
+        feedStatus = status;
+      },
+      onError(error) {
+        feedStatus = { ...(feedStatus || {}), lastError: error.message };
+        console.error(`[feed] ${error.message}`);
+      }
+    })
+  : null;
+
+function enabledInstruments() {
+  return [...new Set(store.listAlerts().filter((alert) => alert.enabled).map((alert) => alert.instrument))];
+}
+
+function syncFeed() {
+  if (!feed) return;
+  feed.setInstruments(enabledInstruments()).catch((error) => console.error(error));
+}
+
+async function startLiveFeed() {
+  if (!feed || !market.upstox.getAccessToken()) return;
+  await feed.start();
+  syncFeed();
+}
+
 const port = Number(process.env.PORT || 5175);
 const sslCertFile = process.env.SSL_CERT_FILE;
 const sslKeyFile = process.env.SSL_KEY_FILE;
+
+function onListening(scheme) {
+  if (feed) {
+    startLiveFeed().catch((error) => console.error(error));
+  } else {
+    poller.start();
+  }
+  console.log(`AI Trade Alerts running at ${scheme}://localhost:${port}`);
+}
 
 function startServer() {
   if (sslCertFile && sslKeyFile) {
@@ -296,17 +346,11 @@ function startServer() {
       },
       app
     );
-    server.listen(port, () => {
-      poller.start();
-      console.log(`AI Trade Alerts running at https://localhost:${port}`);
-    });
+    server.listen(port, () => onListening("https"));
     return;
   }
 
-  app.listen(port, () => {
-    poller.start();
-    console.log(`AI Trade Alerts running at http://localhost:${port}`);
-  });
+  app.listen(port, () => onListening("http"));
 }
 
 startServer();

@@ -171,6 +171,8 @@ input::placeholder { color: var(--muted); }.field input:focus, .field select:foc
 .toast { position: fixed; z-index: 100; right: 24px; bottom: 24px; display: grid; grid-template-columns: 36px minmax(0, 1fr); align-items: center; gap: 11px; width: min(380px, calc(100vw - 48px)); border: 1px solid color-mix(in srgb, var(--green) 30%, var(--line)); border-radius: 13px; padding: 12px; background: var(--surface); box-shadow: var(--shadow-float); }.toast > span { display: grid; width: 35px; height: 35px; place-items: center; border-radius: 10px; background: var(--green-soft); color: var(--green); font-size: .64rem; font-weight: 900; }.toast strong, .toast p { display: block; margin: 0; }.toast strong { font-size: .77rem; }.toast p { margin-top: 3px; color: var(--muted); font-size: .7rem; line-height: 1.45; }.toast.error { border-color: color-mix(in srgb, var(--red) 35%, var(--line)); }.toast.error > span { background: var(--red-soft); color: var(--red); }.toast.warning { border-color: color-mix(in srgb, var(--orange) 35%, var(--line)); }.toast.warning > span { background: var(--orange-soft); color: var(--orange); }
 
 @keyframes reveal { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: none; } }
+.alert-card.live-tick [data-field="price"] { animation: liveTick 500ms ease; }
+@keyframes liveTick { 0% { color: var(--primary); } 100% { color: inherit; } }
 
 @media (max-width: 1250px) {
   .stats-grid { grid-template-columns: 1fr 1fr; }

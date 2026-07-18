@@ -9,6 +9,8 @@ export function createMarketProvider({ store }) {
 
   return {
     name: active.name,
+    isLive: providerName === "upstox",
+    upstox,
     async getQuotes(instruments) {
       return active.getQuotes(instruments);
     },

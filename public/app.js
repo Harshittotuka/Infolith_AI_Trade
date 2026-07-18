@@ -152,7 +152,10 @@ function renderStatus() {
   elements.brokerCardText.textContent = providerText;
   elements.connectButton.textContent = isLive ? "Reconnect Upstox" : "Connect Upstox";
   elements.marketStat.textContent = isLive ? "Live" : wantsUpstox ? "Offline" : "Demo";
-  elements.pollStat.textContent = `Checks every ${Math.round(state.status.pollIntervalMs / 1000)} seconds`;
+  const streaming = state.status.feed?.connected;
+  elements.pollStat.textContent = streaming
+    ? `Live streaming (${state.status.feed.subscribed} instruments)`
+    : `Checks every ${Math.round(state.status.pollIntervalMs / 1000)} seconds`;
 
   const channels = notifications.channels || {};
   const channelValues = Object.values(channels);
@@ -191,6 +194,8 @@ function renderAlerts() {
 
   for (const alert of state.alerts) {
     const card = elements.alertTemplate.content.firstElementChild.cloneNode(true);
+    card.dataset.alertId = alert.id;
+    card.dataset.instrument = alert.instrument;
     card.classList.toggle("paused", !alert.enabled);
     card.querySelector('[data-field="label"]').textContent = alert.label;
     card.querySelector('[data-field="instrument"]').textContent = alert.instrument;
@@ -228,6 +233,33 @@ function renderAlerts() {
     card.querySelector('[data-action="delete"]').addEventListener("click", () => deleteAlert(alert));
     elements.alertsList.append(card);
   }
+}
+
+function applyLiveQuote(quote) {
+  if (!quote?.instrument) return;
+  let touched = false;
+  for (const alert of state.alerts) {
+    if (alert.instrument !== quote.instrument) continue;
+    alert.lastQuote = quote;
+    alert.lastValue = quote[alert.metric] ?? quote.last_price;
+    touched = true;
+  }
+  if (!touched) return;
+
+  const percent = quote.percent_change;
+  document.querySelectorAll(`[data-instrument=${JSON.stringify(quote.instrument)}]`).forEach((card) => {
+    const priceEl = card.querySelector('[data-field="price"]');
+    if (priceEl) priceEl.textContent = formatPrice(quote.last_price);
+    const change = card.querySelector('[data-field="change"]');
+    if (change) {
+      change.textContent = percent === null || percent === undefined ? "Waiting for market data" : `${Number(percent) > 0 ? "+" : ""}${percent}% today`;
+      change.classList.toggle("up", Number(percent) > 0);
+      change.classList.toggle("down", Number(percent) < 0);
+    }
+    card.classList.remove("live-tick");
+    void card.offsetWidth;
+    card.classList.add("live-tick");
+  });
 }
 
 function renderEvents() {
@@ -568,6 +600,13 @@ stream.addEventListener("event", (message) => {
   const event = JSON.parse(message.data);
   maybeNotify(event);
   loadAll().catch(console.error);
+});
+stream.addEventListener("quote", (message) => {
+  try {
+    applyLiveQuote(JSON.parse(message.data));
+  } catch (error) {
+    console.error(error);
+  }
 });
 
 if (new URLSearchParams(window.location.search).get("upstox") === "connected") {
